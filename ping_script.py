@@ -1,37 +1,34 @@
-import subprocess
-import time
+#!/bin/bash
 
-def ping(host):
-    """Пинг указанного адреса и возвращает время отклика в миллисекундах."""
-    try:
-        output = subprocess.check_output(["ping", "-c", "1", "-W", "1", host], stderr=subprocess.STDOUT)
-        for line in output.decode("utf-8").splitlines():
-            if "time=" in line:
-                time_ms = int(line.split("time=")[-1].split(" ")[0].replace("ms", ""))
-                return time_ms
-        return None  
-    except subprocess.CalledProcessError:
-        return None  
+ping_host() {
+    output=$(ping -c 1 -W 1 "$1" 2>&1)
+    if [[ $? -eq 0 ]]; then
+        echo "$output" | grep "time=" | awk -F'time=' '{print $2}' | awk '{print $1}' | sed 's/ms//'
+    else
+        echo "failed"
+    fi
+}
 
+read -p "Введите адрес для пинга: " host
 
-host = input("Введите адрес для пинга: ")
+failed_pings=0
 
-
-failed_pings = 0
-
-while True:
-    ping_time = ping(host)
-    if ping_time is not None:
-        if ping_time > 100:
-            print(f"Высокое время отклика: {ping_time} мс")
-        else:
-            print(f"Время отклика: {ping_time} мс")
-        failed_pings = 0  
-    else:
-        print("Не удалось выполнить пинг")
-        failed_pings += 1
-        if failed_pings >= 3:
-            print("Пинг не доступен в течение 3 последовательных попыток. Остановка скрипта.")
-            break 
-
-    time.sleep(1)
+while true; do
+    ping_time=$(ping_host "$host")
+    if [[ "$ping_time" != "failed" ]]; then
+        if (( $(echo "$ping_time > 100" | bc -l) )); then
+            echo "Высокое время отклика: ${ping_time} мс"
+        else
+            echo "Время отклика: ${ping_time} мс"
+        fi
+        failed_pings=0
+    else
+        echo "Не удалось выполнить пинг"
+        failed_pings=$((failed_pings + 1))
+        if (( failed_pings >= 3 )); then
+            echo "Пинг не доступен в течение 3 последовательных попыток. Остановка скрипта."
+            break
+        fi
+    fi
+    sleep 1
+done
